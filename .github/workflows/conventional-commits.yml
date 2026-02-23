@@ -111,8 +111,8 @@ jobs:
         run: |
           if [ -z "$RECIPIENTS" ]; then echo "No recipients, skipping email"; exit 0; fi
           if [ -z "$ETHEREAL_USER" ] || [ -z "$ETHEREAL_PASS" ]; then echo "Set ETHEREAL_USER and ETHEREAL_PASS secrets to send notifications"; exit 0; fi
-          SUBJECT="PR closed: Conventional Commits validation failed"
-          BODY="PR #${PR_NUM} was closed because some commits did not follow Conventional Commits. Repo: ${REPO}. Invalid commits: ${INVALID_COMMITS}"
+          export SUBJECT="PR closed: Conventional Commits validation failed"
+          export BODY="PR #${PR_NUM} was closed because some commits did not follow Conventional Commits. Repo: ${REPO}. Invalid commits: ${INVALID_COMMITS}"
           python3 -c "
           import smtplib, os
           from email.mime.text import MIMEText
