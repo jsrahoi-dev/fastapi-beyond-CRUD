@@ -86,7 +86,7 @@ docker compose up
 ```
 This starts the API, PostgreSQL, Redis, and Celery. No additional downloads or setup are required.
 
-### GitHub Actions (added 02/22/2026) haven't testing failure yet
+### GitHub Actions (added 02/22/2026) haven't tested failure yet
 
 - **Conventional Commits** (`.github/workflows/conventional-commits.yml`): On every pull request, commits are validated against [Conventional Commits](https://www.conventionalcommits.org/) (e.g. `feat: add login`, `fix(auth): token expiry`). If any commit is invalid, the PR is closed automatically and an email is sent via Ethereal to the repo owner and the PR author (owner email from `REPO_OWNER_EMAIL`).
 
