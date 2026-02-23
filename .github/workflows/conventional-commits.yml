@@ -22,14 +22,14 @@ jobs:
 
       - name: Fetch base branch
         run: |
-          git fetch origin ${{ github.event.pull_request.base.ref }}:${{ github.event.pull_request.base.ref }}
+          git fetch origin ${{ github.event.pull_request.base.ref }}
 
       - name: Validate Conventional Commits
         id: validate
         run: |
           set +e
-          # Compare PR branch head to base branch (commits that would be merged)
-          BASE="${{ github.event.pull_request.base.ref }}"
+          # Use base SHA from event so we don't rely on local ref name
+          BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
           INVALID_COMMITS=""
           CC_PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?!?: .+'
@@ -38,6 +38,8 @@ jobs:
           echo "Commits to validate (git log $BASE..$HEAD):"
           git log "$BASE..$HEAD" --oneline || true
           echo "---"
+          # Write commit subjects to file so read loop gets them reliably (avoids process-substitution quirks)
+          git log "$BASE..$HEAD" --pretty=format:"%s" > /tmp/cc_commit_msgs.txt
           while IFS= read -r msg; do
             [ -z "$msg" ] && continue
             # Skip merge commits
@@ -45,6 +47,7 @@ jobs:
               echo "  SKIP (merge): $msg"
               continue
             fi
+            echo "  Validating: $msg"
             # Conventional Commit: type(scope)?: description
             if echo "$msg" | grep -qE "$CC_PATTERN"; then
               echo "  PASS: $msg"
@@ -52,7 +55,7 @@ jobs:
               echo "  FAIL: $msg"
               INVALID_COMMITS="${INVALID_COMMITS}"$'\n'"- $msg"
             fi
-          done < <(git log "$BASE..$HEAD" --pretty=format:"%s")
+          done < /tmp/cc_commit_msgs.txt
           if [ -n "$INVALID_COMMITS" ]; then
             echo "invalid=true" >> "$GITHUB_OUTPUT"
             echo "commits<<EOF" >> "$GITHUB_OUTPUT"
