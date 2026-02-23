@@ -21,9 +21,12 @@ jobs:
       - name: Validate Conventional Commits
         id: validate
         run: |
+          # Use PR branch head (not github.sha, which is the merge commit and would skip all real commits)
           BASE="${{ github.event.pull_request.base.sha }}"
-          HEAD="${{ github.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
           INVALID_COMMITS=""
+          echo "Checking commits in range $BASE..$HEAD (PR branch commits only):"
+          git log "$BASE..$HEAD" --pretty=format:"  - %s" || true
           while IFS= read -r msg; do
             [ -z "$msg" ] && continue
             # Skip merge commits
