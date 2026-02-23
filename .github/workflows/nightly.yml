@@ -85,34 +85,23 @@ jobs:
           EMAIL_SUBJECT: "Nightly build failed: ${{ github.repository }}"
         run: |
           if [ -z "$ETHEREAL_USER" ] || [ -z "$ETHEREAL_PASS" ]; then echo "Set ETHEREAL_USER and ETHEREAL_PASS secrets to send notifications"; exit 0; fi
-          python3 -c "
+          python3 -c '
           import smtplib, os
           from email.mime.text import MIMEText
-          to = os.environ.get('NOTIFICATION_EMAIL', 'noreply@example.com')
-          repo = os.environ.get('REPO', '')
-          run_url = os.environ.get('RUN_URL', '')
-          branch = os.environ.get('BRANCH', '')
-          test_result = os.environ.get('TEST_RESULT', '')
-          build_result = os.environ.get('BUILD_RESULT', '')
-          body = f'''The nightly build failed.
-
-Repository: {repo}
-Branch: {branch}
-
-Failed jobs:
-  - tests: {test_result}
-  - build-and-push: {build_result}
-
-Open the run for logs and details:
-{run_url}
-'''
+          to = os.environ.get("NOTIFICATION_EMAIL", "noreply@example.com")
+          repo = os.environ.get("REPO", "")
+          run_url = os.environ.get("RUN_URL", "")
+          branch = os.environ.get("BRANCH", "")
+          test_result = os.environ.get("TEST_RESULT", "")
+          build_result = os.environ.get("BUILD_RESULT", "")
+          body = "The nightly build failed.\n\nRepository: " + repo + "\nBranch: " + branch + "\n\nFailed jobs:\n  - tests: " + test_result + "\n  - build-and-push: " + build_result + "\n\nOpen the run for logs and details:\n" + run_url
           msg = MIMEText(body)
-          msg['Subject'] = os.environ.get('EMAIL_SUBJECT', 'Nightly build failed')
-          msg['From'] = os.environ.get('ETHEREAL_USER', '')
-          msg['To'] = to
-          with smtplib.SMTP('smtp.ethereal.email', 587) as s:
+          msg["Subject"] = os.environ.get("EMAIL_SUBJECT", "Nightly build failed")
+          msg["From"] = os.environ.get("ETHEREAL_USER", "")
+          msg["To"] = to
+          with smtplib.SMTP("smtp.ethereal.email", 587) as s:
             s.starttls()
-            s.login(os.environ['ETHEREAL_USER'], os.environ['ETHEREAL_PASS'])
-            s.sendmail(os.environ['ETHEREAL_USER'], [to], msg.as_string())
-          print('Notification sent via Ethereal; check inbox at https://ethereal.email')
-          "
+            s.login(os.environ["ETHEREAL_USER"], os.environ["ETHEREAL_PASS"])
+            s.sendmail(os.environ["ETHEREAL_USER"], [to], msg.as_string())
+          print("Notification sent via Ethereal; check inbox at https://ethereal.email")
+          '
