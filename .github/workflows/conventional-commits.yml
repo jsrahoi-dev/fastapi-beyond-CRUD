@@ -21,33 +21,38 @@ jobs:
       - name: Validate Conventional Commits
         id: validate
         run: |
+          set +e
           # Use PR branch head (not github.sha, which is the merge commit and would skip all real commits)
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
           INVALID_COMMITS=""
+          CC_PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?!?: .+'
           echo "Checking commits in range $BASE..$HEAD (PR branch commits only):"
-          git log "$BASE..$HEAD" --pretty=format:"  - %s" || true
           while IFS= read -r msg; do
             [ -z "$msg" ] && continue
             # Skip merge commits
             if [[ "$msg" =~ ^Merge ]]; then
+              echo "  SKIP (merge): $msg"
               continue
             fi
             # Conventional Commit: type(scope)?: description
-            if ! echo "$msg" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?!?: .+'; then
-              INVALID_COMMITS="${INVALID_COMMITS}\n- $msg"
+            if echo "$msg" | grep -qE "$CC_PATTERN"; then
+              echo "  PASS: $msg"
+            else
+              echo "  FAIL: $msg"
+              INVALID_COMMITS="${INVALID_COMMITS}"$'\n'"- $msg"
             fi
           done < <(git log "$BASE..$HEAD" --pretty=format:"%s")
           if [ -n "$INVALID_COMMITS" ]; then
             echo "invalid=true" >> "$GITHUB_OUTPUT"
             echo "commits<<EOF" >> "$GITHUB_OUTPUT"
-            echo -e "$INVALID_COMMITS" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "$INVALID_COMMITS" >> "$GITHUB_OUTPUT"
             echo "EOF" >> "$GITHUB_OUTPUT"
-            echo "One or more commits do not follow Conventional Commits: $INVALID_COMMITS"
-            exit 1
+            echo "One or more commits do not follow Conventional Commits:$INVALID_COMMITS"
+          else
+            echo "invalid=false" >> "$GITHUB_OUTPUT"
+            echo "All commits follow Conventional Commits."
           fi
-          echo "invalid=false" >> "$GITHUB_OUTPUT"
-          echo "All commits follow Conventional Commits."
 
       - name: Close PR on invalid commits
         if: steps.validate.outputs.invalid == 'true'
@@ -68,7 +73,7 @@ jobs:
           PR_AUTHOR_EMAIL="${{ github.event.pull_request.user.email }}"
           if [ -z "$PR_AUTHOR_EMAIL" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
-            HEAD="${{ github.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
             PR_AUTHOR_EMAIL=$(git log "$BASE..$HEAD" --format='%ae' -1 2>/dev/null || true)
           fi
           # Build unique list: owner (from secret/var) + PR author; dedupe
@@ -114,3 +119,7 @@ jobs:
             s.sendmail(os.environ['ETHEREAL_USER'], recipients, msg.as_string())
           print('Notification sent via Ethereal; check inbox at https://ethereal.email')
           "
+
+      - name: Fail job when commits are invalid
+        if: steps.validate.outputs.invalid == 'true'
+        run: exit 1
