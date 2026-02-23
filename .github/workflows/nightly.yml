@@ -79,17 +79,36 @@ jobs:
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BRANCH: ${{ github.ref_name }}
+          TEST_RESULT: ${{ needs.test.result }}
+          BUILD_RESULT: ${{ needs.build-and-push.result }}
+          EMAIL_SUBJECT: "Nightly build failed: ${{ github.repository }}"
         run: |
           if [ -z "$ETHEREAL_USER" ] || [ -z "$ETHEREAL_PASS" ]; then echo "Set ETHEREAL_USER and ETHEREAL_PASS secrets to send notifications"; exit 0; fi
-          SUBJECT="Nightly build failed: $REPO"
-          BODY="The nightly build failed. Tests or build did not complete successfully. Run: $RUN_URL"
           python3 -c "
           import smtplib, os
           from email.mime.text import MIMEText
           to = os.environ.get('NOTIFICATION_EMAIL', 'noreply@example.com')
-          msg = MIMEText(os.environ.get('BODY',''))
-          msg['Subject'] = os.environ.get('SUBJECT','')
-          msg['From'] = os.environ.get('ETHEREAL_USER','')
+          repo = os.environ.get('REPO', '')
+          run_url = os.environ.get('RUN_URL', '')
+          branch = os.environ.get('BRANCH', '')
+          test_result = os.environ.get('TEST_RESULT', '')
+          build_result = os.environ.get('BUILD_RESULT', '')
+          body = f'''The nightly build failed.
+
+Repository: {repo}
+Branch: {branch}
+
+Failed jobs:
+  - tests: {test_result}
+  - build-and-push: {build_result}
+
+Open the run for logs and details:
+{run_url}
+'''
+          msg = MIMEText(body)
+          msg['Subject'] = os.environ.get('EMAIL_SUBJECT', 'Nightly build failed')
+          msg['From'] = os.environ.get('ETHEREAL_USER', '')
           msg['To'] = to
           with smtplib.SMTP('smtp.ethereal.email', 587) as s:
             s.starttls()
