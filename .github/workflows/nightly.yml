@@ -55,14 +55,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set image name (lowercase for OCI)
+        run: echo "REPO_LC=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Extract metadata and build
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository }}:nightly
-            ${{ env.REGISTRY }}/${{ github.repository }}:nightly-${{ github.run_number }}
+            ${{ env.REGISTRY }}/${{ env.REPO_LC }}:nightly
+            ${{ env.REGISTRY }}/${{ env.REPO_LC }}:nightly-${{ github.run_number }}
 
   notify-on-failure:
     needs: [test, build-and-push]
