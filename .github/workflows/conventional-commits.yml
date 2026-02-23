@@ -17,17 +17,27 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Check out the PR branch head so we validate its commits, not the merge commit
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fetch base branch
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}:${{ github.event.pull_request.base.ref }}
 
       - name: Validate Conventional Commits
         id: validate
         run: |
           set +e
-          # Use PR branch head (not github.sha, which is the merge commit and would skip all real commits)
-          BASE="${{ github.event.pull_request.base.sha }}"
+          # Compare PR branch head to base branch (commits that would be merged)
+          BASE="${{ github.event.pull_request.base.ref }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
           INVALID_COMMITS=""
           CC_PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([^)]+\))?!?: .+'
-          echo "Checking commits in range $BASE..$HEAD (PR branch commits only):"
+          echo "BASE=$BASE (base branch tip)"
+          echo "HEAD=$HEAD (PR branch tip)"
+          echo "Commits to validate (git log $BASE..$HEAD):"
+          git log "$BASE..$HEAD" --oneline || true
+          echo "---"
           while IFS= read -r msg; do
             [ -z "$msg" ] && continue
             # Skip merge commits
@@ -101,8 +111,8 @@ jobs:
         run: |
           if [ -z "$RECIPIENTS" ]; then echo "No recipients, skipping email"; exit 0; fi
           if [ -z "$ETHEREAL_USER" ] || [ -z "$ETHEREAL_PASS" ]; then echo "Set ETHEREAL_USER and ETHEREAL_PASS secrets to send notifications"; exit 0; fi
-          SUBJECT="PR closed: Conventional Commits validation failed"
-          BODY="PR #${PR_NUM} was closed because some commits did not follow Conventional Commits. Repo: ${REPO}. Invalid commits: ${INVALID_COMMITS}"
+          export SUBJECT="PR closed: Conventional Commits validation failed"
+          export BODY="PR #${PR_NUM} was closed because some commits did not follow Conventional Commits. Repo: ${REPO}. Invalid commits: ${INVALID_COMMITS}"
           python3 -c "
           import smtplib, os
           from email.mime.text import MIMEText
