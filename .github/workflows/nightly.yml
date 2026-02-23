@@ -1,0 +1,99 @@
+# Nightly build at 12am UTC: run tests, build image, push to GHCR. Notify on failure.
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost/db
+          JWT_SECRET: test-secret
+          JWT_ALGORITHM: HS256
+          MAIL_USERNAME: test
+          MAIL_PASSWORD: test
+          MAIL_FROM: test@test.com
+          MAIL_PORT: 587
+          MAIL_SERVER: localhost
+          MAIL_FROM_NAME: Test
+          DOMAIN: http://localhost
+        run: pytest src/tests/ -v --tb=short
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata and build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}:nightly
+            ${{ env.REGISTRY }}/${{ github.repository }}:nightly-${{ github.run_number }}
+          cache-from: type=gha
+          cache-to: type=gha
+
+  notify-on-failure:
+    needs: [test, build-and-push]
+    if: always() && (needs.test.result == 'failure' || needs.build-and-push.result == 'failure') && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send failure notification (Ethereal)
+        env:
+          ETHEREAL_USER: ${{ secrets.ETHEREAL_USER }}
+          ETHEREAL_PASS: ${{ secrets.ETHEREAL_PASS }}
+          NOTIFICATION_EMAIL: ${{ vars.NOTIFICATION_EMAIL || secrets.NOTIFICATION_EMAIL || 'noreply@example.com' }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$ETHEREAL_USER" ] || [ -z "$ETHEREAL_PASS" ]; then echo "Set ETHEREAL_USER and ETHEREAL_PASS secrets to send notifications"; exit 0; fi
+          SUBJECT="Nightly build failed: $REPO"
+          BODY="The nightly build failed. Tests or build did not complete successfully. Run: $RUN_URL"
+          python3 -c "
+          import smtplib, os
+          from email.mime.text import MIMEText
+          to = os.environ.get('NOTIFICATION_EMAIL', 'noreply@example.com')
+          msg = MIMEText(os.environ.get('BODY',''))
+          msg['Subject'] = os.environ.get('SUBJECT','')
+          msg['From'] = os.environ.get('ETHEREAL_USER','')
+          msg['To'] = to
+          with smtplib.SMTP('smtp.ethereal.email', 587) as s:
+            s.starttls()
+            s.login(os.environ['ETHEREAL_USER'], os.environ['ETHEREAL_PASS'])
+            s.sendmail(os.environ['ETHEREAL_USER'], [to], msg.as_string())
+          print('Notification sent via Ethereal; check inbox at https://ethereal.email')
+          "
